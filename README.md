@@ -66,11 +66,5 @@ huggingface_token = "your_hf_token_here"
 
 **Dr. Joy Karmakar**  
 Postdoctoral Researcher, UCSF  
-Founder of DyeMind  
+Founder & CEO of DyeMind  
 [dyemind.com](https://dyemind.com)
-
----
-
-## 📜 License
-
-This project is open for academic use under the MIT License.
