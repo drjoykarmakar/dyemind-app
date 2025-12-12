@@ -110,61 +110,38 @@ Keep it concise, scientific, and factual. Do not hallucinate data. [/INST]
         return "⚠️ AI Service Busy or unexpected response format. Please try again in 30 seconds."
 
 # --- 3. DATA FETCHING UTILITIES ---
-
-@st.cache_data(show_spinner=False)
-def get_pubchem_data(query):
-    """Fetches chemical structure & SMILES."""
-    try:
-        base_url = "https://pubchem.ncbi.nlm.nih.gov/rest/pug"
-        search = requests.get(
-            f"{base_url}/compound/name/{query}/cids/JSON",
-            timeout=30
-        ).json()
-        cid = search['IdentifierList']['CID'][0]
-
-        props = requests.get(
-            f"{base_url}/compound/cid/{cid}/property/CanonicalSMILES,MolecularFormula,MolecularWeight/JSON",
-            timeout=30
-        ).json()
-        prop_data = props['PropertyTable']['Properties'][0]
-
-        return {
-            "cid": cid,
-            "smiles": prop_data.get('CanonicalSMILES', 'N/A'),
-            "formula": prop_data.get('MolecularFormula', 'N/A'),
-            "image": f"{base_url}/compound/cid/{cid}/PNG?record_type=2d&image_size=large",
-            "link": f"https://pubchem.ncbi.nlm.nih.gov/compound/{cid}"
-        }
-    except Exception:
-        return None
-
 @st.cache_data(show_spinner=False)
 def get_pubmed_literature(query):
-    """Fetches real abstracts from PubMed."""
+    """Fetches real abstracts from PubMed, including PubMed links."""
     try:
+        # Search
         db_url = "https://eutils.ncbi.nlm.nih.gov/entrez/eutils"
         term = f"{query} AND (fluorescent OR probe OR sensor)"
         search = requests.get(
-            f"{db_url}/esearch.fcgi?db=pubmed&term={term}&retmode=json&retmax=5&sort=relevance",
-            timeout=30
+            f"{db_url}/esearch.fcgi?db=pubmed&term={term}&retmode=json&retmax=5&sort=relevance"
         ).json()
         ids = search.get("esearchresult", {}).get("idlist", [])
 
         if not ids:
             return []
 
+        # Fetch
         details = requests.get(
-            f"{db_url}/efetch.fcgi?db=pubmed&id={','.join(ids)}&retmode=xml",
-            timeout=30
+            f"{db_url}/efetch.fcgi?db=pubmed&id={','.join(ids)}&retmode=xml"
         ).content
         root = ET.fromstring(details)
 
         articles = []
-        for art in root.findall(".//PubmedArticle"):
+        for pmid, art in zip(ids, root.findall(".//PubmedArticle")):
             title = art.findtext(".//ArticleTitle")
             abstract = art.findtext(".//AbstractText")
             if abstract:
-                articles.append({"title": title, "abstract": abstract})
+                articles.append({
+                    "pmid": pmid,
+                    "title": title,
+                    "abstract": abstract,
+                    "url": f"https://pubmed.ncbi.nlm.nih.gov/{pmid}/"
+                })
         return articles
     except Exception:
         return []
@@ -227,10 +204,11 @@ if query:
         else:
             status_placeholder.warning("No data found. Check spelling or try a different dye.")
 
-    # 4. Show Literature Sources
-    if articles:
-        st.divider()
-        st.subheader("📚 Key Literature (PubMed)")
-        for art in articles:
-            with st.expander(art['title']):
-                st.write(art['abstract'])
+   # 4. Show Literature Sources
+if articles:
+    st.divider()
+    st.subheader("📚 Key Literature (PubMed)")
+    for art in articles:
+        with st.expander(art['title']):
+            st.write(art['abstract'])
+            st.markdown(f"[Open on PubMed]({art['url']})")
