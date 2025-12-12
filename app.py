@@ -25,7 +25,7 @@ def query_huggingface(payload):
     """
     Sends a prompt to the Mistral-7B-Instruct model via Hugging Face Free API.
     """
-    API_URL = "https://api-inference.huggingface.co/models/EssentialAI/rnj-1-instruct"
+    API_URL = "https://api-inference.huggingface.co/models/mistralai/Mistral-7B-Instruct-v0.3"
     headers = {"Authorization": f"Bearer {HF_TOKEN}"}
 
     try:
