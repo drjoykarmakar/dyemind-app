@@ -110,6 +110,34 @@ Keep it concise, scientific, and factual. Do not hallucinate data. [/INST]
         return "⚠️ AI Service Busy or unexpected response format. Please try again in 30 seconds."
 
 # --- 3. DATA FETCHING UTILITIES ---
+
+@st.cache_data(show_spinner=False)
+def get_pubchem_data(query):
+    """Fetches chemical structure & SMILES from PubChem."""
+    try:
+        base_url = "https://pubchem.ncbi.nlm.nih.gov/rest/pug"
+        search = requests.get(
+            f"{base_url}/compound/name/{query}/cids/JSON",
+            timeout=30
+        ).json()
+        cid = search['IdentifierList']['CID'][0]
+
+        props = requests.get(
+            f"{base_url}/compound/cid/{cid}/property/CanonicalSMILES,MolecularFormula,MolecularWeight/JSON",
+            timeout=30
+        ).json()
+        prop_data = props['PropertyTable']['Properties'][0]
+
+        return {
+            "cid": cid,
+            "smiles": prop_data.get('CanonicalSMILES', 'N/A'),
+            "formula": prop_data.get('MolecularFormula', 'N/A'),
+            "image": f"{base_url}/compound/cid/{cid}/PNG?record_type=2d&image_size=large",
+            "link": f"https://pubchem.ncbi.nlm.nih.gov/compound/{cid}"
+        }
+    except Exception:
+        return None
+
 @st.cache_data(show_spinner=False)
 def get_pubmed_literature(query):
     """Fetches real abstracts from PubMed, including PubMed links."""
@@ -204,11 +232,11 @@ if query:
         else:
             status_placeholder.warning("No data found. Check spelling or try a different dye.")
 
-   # 4. Show Literature Sources
-if articles:
-    st.divider()
-    st.subheader("📚 Key Literature (PubMed)")
-    for art in articles:
-        with st.expander(art['title']):
-            st.write(art['abstract'])
-            st.markdown(f"[Open on PubMed]({art['url']})")
+    # 4. Show Literature Sources
+    if articles:
+        st.divider()
+        st.subheader("📚 Key Literature (PubMed)")
+        for art in articles:
+            with st.expander(art['title']):
+                st.write(art['abstract'])
+                st.markdown(f"[Open on PubMed]({art['url']})")
