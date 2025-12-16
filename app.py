@@ -216,7 +216,7 @@ with st.sidebar:
     st.markdown("**Dr. Joy Karmakar**")
     st.success("Running on Free Open-Source AI")
 
-st.title("🧠 DyeMind: The Fluorophore Scientist")
+st.title("🧠 DyeMind: The AI Assistant for Fluorophores")
 
 query = st.text_input(
     "🔍 Enter fluorophore name or topic",
