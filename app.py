@@ -29,11 +29,15 @@ if not HF_TOKEN:
     st.stop()
 
 # ==================================================
-# HUGGING FACE AI SETUP
+# HUGGING FACE AI SETUP (NEW ROUTER API)
 # ==================================================
 HF_MODEL = "mistralai/Mistral-7B-Instruct-v0.3"
-HF_API_URL = f"https://api-inference.huggingface.co/models/{HF_MODEL}"
-HF_HEADERS = {"Authorization": f"Bearer {HF_TOKEN}"}
+HF_API_URL = f"https://router.huggingface.co/hf-inference/models/{HF_MODEL}"
+
+HF_HEADERS = {
+    "Authorization": f"Bearer {HF_TOKEN}",
+    "Content-Type": "application/json"
+}
 
 def query_huggingface(prompt):
     for _ in range(3):
