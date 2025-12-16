@@ -15,13 +15,13 @@ st.set_page_config(
 )
 
 # ==================================================
-# SECRETS (ROBUST)
+# SECRETS
 # ==================================================
 HF_TOKEN = (
     os.environ.get("HF_TOKEN")
     or os.environ.get("HFTOKEN")
-    or st.secrets.get("HF_TOKEN", None)
-    or st.secrets.get("HFTOKEN", None)
+    or st.secrets.get("HF_TOKEN")
+    or st.secrets.get("HFTOKEN")
 )
 
 if not HF_TOKEN:
@@ -40,7 +40,6 @@ HF_HEADERS = {
 }
 
 def query_huggingface(prompt):
-    """Safe Hugging Face inference (never crashes on bad responses)."""
     for _ in range(3):
         response = requests.post(
             HF_API_URL,
@@ -56,37 +55,32 @@ def query_huggingface(prompt):
             timeout=60
         )
 
-        # 1️⃣ HTTP-level failure
         if response.status_code != 200:
             time.sleep(3)
             continue
 
-        # 2️⃣ Non-JSON response safety
         try:
             output = response.json()
         except ValueError:
             time.sleep(3)
             continue
 
-        # 3️⃣ Hugging Face error payload
         if isinstance(output, dict) and "error" in output:
             if "loading" in output["error"].lower():
                 time.sleep(3)
                 continue
             return f"⚠️ AI Error: {output['error']}"
 
-        # 4️⃣ Success
         if isinstance(output, list) and output and "generated_text" in output[0]:
             return output[0]["generated_text"]
 
     return (
         "⚠️ AI service temporarily unavailable.\n\n"
-        "This is common on free Hugging Face inference.\n"
         "Please wait ~30 seconds and try again."
     )
 
 # ==================================================
-# DATA FETCHERS (CACHED)
+# DATA FETCHERS
 # ==================================================
 @st.cache_data(show_spinner=False)
 def get_wikipedia_intro(query):
@@ -106,19 +100,15 @@ def get_pubchem_data(query):
     try:
         base = "https://pubchem.ncbi.nlm.nih.gov/rest/pug"
 
-        cid_resp = requests.get(
+        cid = requests.get(
             f"{base}/compound/name/{query}/cids/JSON",
             timeout=10
-        ).json()
+        ).json()["IdentifierList"]["CID"][0]
 
-        cid = cid_resp["IdentifierList"]["CID"][0]
-
-        prop_resp = requests.get(
+        props = requests.get(
             f"{base}/compound/cid/{cid}/property/CanonicalSMILES,MolecularFormula/JSON",
             timeout=10
-        ).json()
-
-        props = prop_resp["PropertyTable"]["Properties"][0]
+        ).json()["PropertyTable"]["Properties"][0]
 
         return {
             "cid": cid,
@@ -157,10 +147,14 @@ def get_pubmed_literature(query):
         for art in root.findall(".//PubmedArticle"):
             title = art.findtext(".//ArticleTitle")
             abstract = art.findtext(".//AbstractText")
-            if title and abstract:
+            pmid = art.findtext(".//PMID")
+
+            if title and abstract and pmid:
                 articles.append({
                     "title": title,
-                    "abstract": abstract
+                    "abstract": abstract,
+                    "pmid": pmid,
+                    "link": f"https://pubmed.ncbi.nlm.nih.gov/{pmid}/"
                 })
 
         return articles
@@ -270,4 +264,5 @@ if query:
         st.subheader("📚 PubMed References")
         for art in articles:
             with st.expander(art["title"]):
+                st.markdown(f"[🔗 View on PubMed]({art['link']})")
                 st.write(art["abstract"])
