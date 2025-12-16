@@ -13,12 +13,12 @@ st.set_page_config(
 )
 
 # --- SECRET HANDLING (Optimized for Hugging Face) ---
-# We check the Environment Variable "HFTOKEN" first (for Hugging Face), 
+# We check the Environment Variable "HF_TOKEN" first (for Hugging Face), 
 # then checks local secrets (for local testing).
-HFTOKEN = os.environ.get("HFTOKEN") or st.secrets.get("HFTOKEN")
+HF_TOKEN = os.environ.get("HF_TOKEN") or st.secrets.get("HF_TOKEN")
 
-if not HFTOKEN:
-    st.error("🚨 Hugging Face Token missing! Please add 'HFTOKEN' to your Space Settings.")
+if not HF_TOKEN:
+    st.error("🚨 Hugging Face Token missing! Please add 'HF_TOKEN' to your Space Settings.")
     st.stop()
 
 # --- 2. THE NEW FREE AI ENGINE (Hugging Face) ---
@@ -29,7 +29,7 @@ def queryhuggingface(payload):
     """
     # Using Mistral-7B-Instruct-v0.3 (Newer & often more reliable)
     APIURL = "https://api-inference.huggingface.co/models/mistralai/Mistral-7B-Instruct-v0.3"
-    headers = {"Authorization": f"Bearer {HFTOKEN}"}
+    headers = {"Authorization": f"Bearer {HF_TOKEN}"}
     
     try:
         response = requests.post(APIURL, headers=headers, json=payload)
