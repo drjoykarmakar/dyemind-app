@@ -5,7 +5,7 @@ import time
 import os
 
 # ==================================================
-# PAGE CONFIG (CORRECT)
+# PAGE CONFIG
 # ==================================================
 st.set_page_config(
     page_title="DyeMind | Free AI Fluorophore Explorer",
@@ -15,7 +15,7 @@ st.set_page_config(
 )
 
 # ==================================================
-# SECRET HANDLING (ROBUST)
+# SECRETS (ROBUST)
 # ==================================================
 HF_TOKEN = (
     os.environ.get("HF_TOKEN")
@@ -25,11 +25,11 @@ HF_TOKEN = (
 )
 
 if not HF_TOKEN:
-    st.error("🚨 Hugging Face Token missing. Add HF_TOKEN to Streamlit Secrets.")
+    st.error("🚨 Hugging Face token missing. Add HF_TOKEN to Streamlit Secrets.")
     st.stop()
 
 # ==================================================
-# HUGGING FACE AI SETUP (NEW ROUTER API)
+# HUGGING FACE ROUTER API
 # ==================================================
 HF_MODEL = "mistralai/Mistral-7B-Instruct-v0.3"
 HF_API_URL = f"https://router.huggingface.co/hf-inference/models/{HF_MODEL}"
@@ -40,6 +40,7 @@ HF_HEADERS = {
 }
 
 def query_huggingface(prompt):
+    """Safe Hugging Face inference (never crashes on bad responses)."""
     for _ in range(3):
         response = requests.post(
             HF_API_URL,
@@ -55,21 +56,37 @@ def query_huggingface(prompt):
             timeout=60
         )
 
-        output = response.json()
+        # 1️⃣ HTTP-level failure
+        if response.status_code != 200:
+            time.sleep(3)
+            continue
 
+        # 2️⃣ Non-JSON response safety
+        try:
+            output = response.json()
+        except ValueError:
+            time.sleep(3)
+            continue
+
+        # 3️⃣ Hugging Face error payload
         if isinstance(output, dict) and "error" in output:
             if "loading" in output["error"].lower():
                 time.sleep(3)
                 continue
             return f"⚠️ AI Error: {output['error']}"
 
-        if isinstance(output, list) and "generated_text" in output[0]:
+        # 4️⃣ Success
+        if isinstance(output, list) and output and "generated_text" in output[0]:
             return output[0]["generated_text"]
 
-    return "⚠️ AI service busy. Please try again."
+    return (
+        "⚠️ AI service temporarily unavailable.\n\n"
+        "This is common on free Hugging Face inference.\n"
+        "Please wait ~30 seconds and try again."
+    )
 
 # ==================================================
-# DATA FETCHERS (CACHED, SAFE)
+# DATA FETCHERS (CACHED)
 # ==================================================
 @st.cache_data(show_spinner=False)
 def get_wikipedia_intro(query):
@@ -88,6 +105,7 @@ def get_wikipedia_intro(query):
 def get_pubchem_data(query):
     try:
         base = "https://pubchem.ncbi.nlm.nih.gov/rest/pug"
+
         cid_resp = requests.get(
             f"{base}/compound/name/{query}/cids/JSON",
             timeout=10
@@ -119,21 +137,21 @@ def get_pubmed_literature(query):
         base = "https://eutils.ncbi.nlm.nih.gov/entrez/eutils"
         term = f"{query} fluorescent probe"
 
-        search_resp = requests.get(
+        search = requests.get(
             f"{base}/esearch.fcgi?db=pubmed&term={term}&retmode=json&retmax=5",
             timeout=10
         ).json()
 
-        ids = search_resp["esearchresult"]["idlist"]
+        ids = search["esearchresult"]["idlist"]
         if not ids:
             return []
 
-        fetch_resp = requests.get(
+        fetch = requests.get(
             f"{base}/efetch.fcgi?db=pubmed&id={','.join(ids)}&retmode=xml",
             timeout=10
         ).content
 
-        root = ET.fromstring(fetch_resp)
+        root = ET.fromstring(fetch)
 
         articles = []
         for art in root.findall(".//PubmedArticle"):
@@ -193,7 +211,6 @@ FORMAT:
 **Limitations**
 [/INST]
 """
-
     return query_huggingface(prompt)
 
 # ==================================================
