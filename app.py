@@ -5,11 +5,11 @@ import time
 import os
 
 # --- 1. CONFIGURATION & SETUP ---
-st.setpageconfig(
-    pagetitle="DyeMind | Free AI Fluorophore Explorer",
-    pageicon="🧬",
+st.set_page_config(
+    page_title="DyeMind | Free AI Fluorophore Explorer",
+    page_icon="🧬",
     layout="wide",
-    initialsidebarstate="expanded"
+    initial_sidebar_state="expanded"
 )
 
 # --- SECRET HANDLING (Optimized for Hugging Face) ---
