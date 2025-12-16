@@ -5,7 +5,7 @@ import time
 import os
 
 # ==================================================
-# PAGE CONFIG (CORRECT API NAME)
+# PAGE CONFIG (CORRECT)
 # ==================================================
 st.set_page_config(
     page_title="DyeMind | Free AI Fluorophore Explorer",
@@ -25,11 +25,11 @@ HF_TOKEN = (
 )
 
 if not HF_TOKEN:
-    st.error("🚨 Hugging Face Token missing. Add HF_TOKEN in Streamlit Secrets.")
+    st.error("🚨 Hugging Face Token missing. Add HF_TOKEN to Streamlit Secrets.")
     st.stop()
 
 # ==================================================
-# HUGGING FACE AI
+# HUGGING FACE AI SETUP
 # ==================================================
 HF_MODEL = "mistralai/Mistral-7B-Instruct-v0.3"
 HF_API_URL = f"https://api-inference.huggingface.co/models/{HF_MODEL}"
@@ -43,13 +43,14 @@ def query_huggingface(prompt):
             json={
                 "inputs": prompt,
                 "parameters": {
-                    "max_new_tokens": 600,
+                    "max_new_tokens": 700,
                     "temperature": 0.3,
                     "return_full_text": False
                 }
             },
             timeout=60
         )
+
         output = response.json()
 
         if isinstance(output, dict) and "error" in output:
@@ -64,7 +65,7 @@ def query_huggingface(prompt):
     return "⚠️ AI service busy. Please try again."
 
 # ==================================================
-# DATA FETCHING (CACHED – CORRECT DECORATOR)
+# DATA FETCHERS (CACHED, SAFE)
 # ==================================================
 @st.cache_data(show_spinner=False)
 def get_wikipedia_intro(query):
@@ -83,15 +84,19 @@ def get_wikipedia_intro(query):
 def get_pubchem_data(query):
     try:
         base = "https://pubchem.ncbi.nlm.nih.gov/rest/pug"
-        cid = requests.get(
+        cid_resp = requests.get(
             f"{base}/compound/name/{query}/cids/JSON",
             timeout=10
-        ).json()["IdentifierList"]["CID"][0]
+        ).json()
 
-        props = requests.get(
+        cid = cid_resp["IdentifierList"]["CID"][0]
+
+        prop_resp = requests.get(
             f"{base}/compound/cid/{cid}/property/CanonicalSMILES,MolecularFormula/JSON",
             timeout=10
-        ).json()["PropertyTable"]["Properties"][0]
+        ).json()
+
+        props = prop_resp["PropertyTable"]["Properties"][0]
 
         return {
             "cid": cid,
@@ -109,26 +114,33 @@ def get_pubmed_literature(query):
     try:
         base = "https://eutils.ncbi.nlm.nih.gov/entrez/eutils"
         term = f"{query} fluorescent probe"
-        ids = requests.get(
+
+        search_resp = requests.get(
             f"{base}/esearch.fcgi?db=pubmed&term={term}&retmode=json&retmax=5",
             timeout=10
-        ).json()["esearchresult"]["idlist"]
+        ).json()
 
+        ids = search_resp["esearchresult"]["idlist"]
         if not ids:
             return []
 
-        xml = requests.get(
+        fetch_resp = requests.get(
             f"{base}/efetch.fcgi?db=pubmed&id={','.join(ids)}&retmode=xml",
             timeout=10
         ).content
 
-        root = ET.fromstring(xml)
+        root = ET.fromstring(fetch_resp)
+
         articles = []
-        for a in root.findall(".//PubmedArticle"):
-            title = a.findtext(".//ArticleTitle")
-            abstract = a.findtext(".//AbstractText")
-            if abstract:
-                articles.append({"title": title, "abstract": abstract})
+        for art in root.findall(".//PubmedArticle"):
+            title = art.findtext(".//ArticleTitle")
+            abstract = art.findtext(".//AbstractText")
+            if title and abstract:
+                articles.append({
+                    "title": title,
+                    "abstract": abstract
+                })
+
         return articles
     except:
         return []
@@ -137,7 +149,104 @@ def get_pubmed_literature(query):
 # AI SYNTHESIS
 # ==================================================
 def generate_ai_report(query, wiki, chem, articles):
-    wiki_text = wiki[0] if wiki[0] else "No Wikipedia data."
-    chem_text = f"SMILES: {chem['smiles']} | Formula: {chem['formula']}" if chem else "No chemical data."
-    lit_text = "\n".join(
-        [f"- {a['title']}: {a['abstract'][:250]}..." for a in]()
+    wiki_text = wiki[0] if wiki[0] else "No Wikipedia introduction available."
+    chem_text = (
+        f"SMILES: {chem['smiles']} | Formula: {chem['formula']}"
+        if chem else "No chemical data available."
+    )
+
+    lit_text = (
+        "\n".join(
+            [f"- {a['title']}: {a['abstract'][:250]}..." for a in articles]
+        )
+        if articles else "No relevant literature found."
+    )
+
+    prompt = f"""[INST]
+You are an expert fluorescent probe scientist.
+
+Write a concise, factual scientific summary for "{query}".
+
+WIKIPEDIA:
+{wiki_text}
+
+CHEMISTRY:
+{chem_text}
+
+LITERATURE:
+{lit_text}
+
+RULES:
+- Do NOT hallucinate excitation/emission values
+- Do NOT invent LOD values
+- Academic tone only
+
+FORMAT:
+**Overview**
+**Chemical Properties**
+**Performance**
+**Applications**
+**Limitations**
+[/INST]
+"""
+
+    return query_huggingface(prompt)
+
+# ==================================================
+# UI
+# ==================================================
+with st.sidebar:
+    st.title("🧪 DyeMind")
+    st.caption("Free AI Fluorophore Explorer")
+    st.markdown("**Dr. Joy Karmakar**")
+    st.success("Running on Free Open-Source AI")
+
+st.title("🧠 DyeMind: The Fluorophore Scientist")
+
+query = st.text_input(
+    "🔍 Enter fluorophore name or topic",
+    placeholder="e.g. Bimane, Rhodamine B, Fura-2"
+)
+
+if query:
+    with st.spinner("🔬 Gathering data..."):
+        wiki = get_wikipedia_intro(query)
+        chem = get_pubchem_data(query)
+        articles = get_pubmed_literature(query)
+
+    col1, col2 = st.columns([1, 2])
+
+    if chem:
+        with col1:
+            st.image(
+                chem["image"],
+                caption=f"PubChem CID: {chem['cid']}",
+                use_container_width=True
+            )
+            st.code(chem["smiles"], language="text")
+            st.markdown(f"[View on PubChem]({chem['link']})")
+
+    with col2:
+        report = generate_ai_report(query, wiki, chem, articles)
+        st.subheader("📝 AI Scientific Summary")
+        st.markdown(report)
+
+        st.download_button(
+            "📥 Download Report",
+            report,
+            file_name=f"{query.replace(' ', '_')}_DyeMind_Report.md"
+        )
+
+    if wiki[0]:
+        st.divider()
+        st.subheader("📘 Wikipedia Introduction")
+        st.write(wiki[0])
+        if wiki[1]:
+            st.markdown(f"[Read more on Wikipedia]({wiki[1]})")
+
+    if articles:
+        st.divider()
+        st.subheader("📚 PubMed References")
+        for art in articles:
+            with st.expander(art["title"]):
+                st.write(art["abstract"])
